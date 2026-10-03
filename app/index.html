@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="tr">
+<head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=1920, initial-scale=1">
+   <title>Xash3D for Tizen</title>
+   <link rel="stylesheet" href="style.css">
+   <script>
+      /* Installed first so that failures in later scripts are visible on screen. */
+      (function () {
+         function show(msg) {
+            var el = document.getElementById("errors");
+            if (!el) { window.__xashEarlyErrors = (window.__xashEarlyErrors || []).concat(msg); return; }
+            el.style.display = "block";
+            el.textContent += msg + "\n";
+         }
+         window.xashShowError = show;
+         window.addEventListener("error", function (e) {
+            show("Hata: " + (e.message || e) + (e.filename ? " (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
+         });
+         window.addEventListener("unhandledrejection", function (e) {
+            show("Hata: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
+         });
+      })();
+   </script>
+</head>
+<body>
+   <div id="launcher">
+      <header>
+         <div>
+            <h1>Xash3D</h1>
+            <div id="subtitle" class="muted">Samsung Tizen TV</div>
+         </div>
+      </header>
+
+      <section id="screen-home" class="screen">
+         <div class="list">
+            <button class="item" id="btn-play"><span>Half-Life'ı başlat</span><span class="meta" id="play-meta"></span></button>
+            <button class="item" id="btn-url"><span>Oyun dosyalarının adresi</span><span class="meta">HTTP</span></button>
+            <button class="item" id="btn-help"><span>Kontroller</span><span class="meta"></span></button>
+            <button class="item" id="btn-reset"><span>Kayıtları ve ayarları sil</span><span class="meta"></span></button>
+         </div>
+         <p class="muted note">Oyun dosyaları uygulamayla gelmez. Kendi Half-Life kopyandaki <code>valve</code> klasörünün bulunduğu
+            bilgisayarda ya da telefonda <code>python3 serve.py Half-Life-klasörü</code> çalıştır ve gösterdiği adresi buraya gir.</p>
+      </section>
+
+      <section id="screen-url" class="screen">
+         <h2>Oyun dosyalarının adresi</h2>
+         <p class="muted"><code>tools/serve.py</code> betiğinin gösterdiği adres. Örnek: <code>http://192.168.1.20:8000/</code><br>
+            Adres <code>.zip</code> ile bitmiyorsa o klasördeki <code>valve.zip</code> indirilir.</p>
+         <input type="text" id="url-input" class="focusable" spellcheck="false" autocomplete="off">
+         <div class="row">
+            <button class="btn" id="btn-url-ok">Kaydet ve başlat</button>
+         </div>
+      </section>
+
+      <section id="screen-help" class="screen">
+         <h2>Kontroller</h2>
+         <table class="keys">
+            <tr><td>Yön tuşları</td><td>İleri / geri, sağa / sola dön (menüde gezinme)</td></tr>
+            <tr><td>OK</td><td>Ateş (menüde seç)</td></tr>
+            <tr><td>Geri</td><td>Oyun menüsü (Esc)</td></tr>
+            <tr><td>Kırmızı</td><td>Zıpla</td></tr>
+            <tr><td>Yeşil</td><td>Kullan</td></tr>
+            <tr><td>Sarı</td><td>Şarjör değiştir</td></tr>
+            <tr><td>Mavi</td><td>Eğil</td></tr>
+            <tr><td>CH + / CH −</td><td>Sonraki / önceki silah</td></tr>
+            <tr><td>1 – 5</td><td>Silah grupları</td></tr>
+            <tr><td>Oynat/Duraklat</td><td>Hızlı kayıt (F6)</td></tr>
+            <tr><td>Geri sar</td><td>Hızlı kaydı yükle (F7)</td></tr>
+         </table>
+         <p class="muted">Kumandayla ancak menüde gezmek ve denemek mümkün; oynamak için USB/Bluetooth oyun kolu ya da klavye + fare bağla.</p>
+      </section>
+   </div>
+
+   <canvas id="canvas" tabindex="0"></canvas>
+
+   <div id="loading">
+      <div class="spinner"></div>
+      <div id="loading-text">Yükleniyor…</div>
+      <div class="bar"><div id="loading-bar"></div></div>
+   </div>
+
+   <pre id="errors"></pre>
+
+   <script src="fflate.min.js"></script>
+   <script src="app.js"></script>
+</body>
+</html>

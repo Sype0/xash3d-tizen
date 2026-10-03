@@ -1,0 +1,6 @@
+wgt/
+site/
+build/
+*.wgt
+*.p12
+*.zip

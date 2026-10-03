@@ -1,0 +1,185 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Engine: prebuilt WebAssembly package from npm, pinned by hash.
+  ENGINE_PKG: xash3d-fwgs-1.2.2.tgz
+  ENGINE_URL: https://registry.npmjs.org/xash3d-fwgs/-/xash3d-fwgs-1.2.2.tgz
+  ENGINE_SHA512: N2w5uSs3OXDGuvgryuKO42LbCQUOveYXDUr9NqmbRnjxpEjVKzhHC+4sTJe6zUTPtiIZSCfd+rHpEa92Da4Vwg==
+  # Game libraries: built from source with the Emscripten version the engine was built with.
+  HLSDK_SHA: 371cdf3b28998f4f3278d1eacd1b1250096324cc
+  EMSDK_VERSION: 4.0.23
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Version
+        id: ver
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      # Both upstream sources have been disappearing, so the first build
+      # keeps a copy in the "upstream" release and later builds use that.
+      - name: Fetch upstream sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/up
+          HLSDK_PKG="hlsdk-portable-$HLSDK_SHA.tar.gz"
+          gh release download upstream -R "$GITHUB_REPOSITORY" -D /tmp/up || true
+          missing=()
+          if [ ! -f "/tmp/up/$ENGINE_PKG" ]; then
+            curl -fsSL -o "/tmp/up/$ENGINE_PKG" "$ENGINE_URL"
+            missing+=("/tmp/up/$ENGINE_PKG")
+          fi
+          if [ ! -f "/tmp/up/$HLSDK_PKG" ]; then
+            curl -fsSL -o "/tmp/up/$HLSDK_PKG" "https://github.com/FWGS/hlsdk-portable/archive/$HLSDK_SHA.tar.gz"
+            missing+=("/tmp/up/$HLSDK_PKG")
+          fi
+          got=$(openssl dgst -sha512 -binary "/tmp/up/$ENGINE_PKG" | base64 -w0)
+          if [ "$got" != "$ENGINE_SHA512" ]; then
+            echo "::error::engine package hash mismatch: $got"; exit 1
+          fi
+          if [ ${#missing[@]} -gt 0 ]; then
+            gh release view upstream -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+              gh release create upstream -R "$GITHUB_REPOSITORY" --prerelease --title "Upstream sources" \
+                --notes "Unmodified copies of the upstream packages this project is built from: the xash3d-fwgs WebAssembly engine package (npm) and the hlsdk-portable source snapshot."
+            gh release upload upstream -R "$GITHUB_REPOSITORY" --clobber "${missing[@]}"
+          fi
+          mkdir -p /tmp/engine /tmp/hlsdk
+          tar xzf "/tmp/up/$ENGINE_PKG" -C /tmp/engine --strip-components=1
+          tar xzf "/tmp/up/$HLSDK_PKG" -C /tmp/hlsdk --strip-components=1
+
+      - name: Cache game libraries
+        id: hlsdk-cache
+        uses: actions/cache@v4
+        with:
+          path: build/hlsdk
+          key: hlsdk-${{ env.HLSDK_SHA }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('tools/build-hlsdk.sh') }}
+
+      - name: Build game libraries
+        if: steps.hlsdk-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build/hlsdk
+          docker run --rm -v /tmp/hlsdk:/src -v "$PWD/build/hlsdk:/out" -v "$PWD/tools:/tools:ro" \
+            "emscripten/emsdk:$EMSDK_VERSION" bash /tools/build-hlsdk.sh /src /out
+
+      - name: Assemble site
+        run: |
+          mkdir -p site/engine
+          cp -r app/. site/
+          d=/tmp/engine/dist
+          cp "$d/raw.js" "$d/xash.wasm" "$d/filesystem_stdio.wasm" "$d/libref_webgl2.wasm" "$d/libmenu.wasm" \
+             "$d/valve/extras.pk3" site/engine/
+          cp build/hlsdk/*.wasm site/engine/
+          cp LICENSE site/
+          touch site/.nojekyll
+          ls -la site site/engine
+
+      - name: Smoke test (headless Chromium)
+        run: |
+          node --check app/app.js
+          npm install --no-save --prefix /tmp/pw playwright@1
+          /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+          # stub game folder: no Half-Life data in CI
+          mkdir -p /tmp/data/stub/Half-Life/valve/dlls /tmp/data/stub/Half-Life/valve/maps
+          printf 'game "Half-Life"\ngamedir "valve"\n' > /tmp/data/stub/Half-Life/valve/liblist.gam
+          echo stub > /tmp/data/stub/Half-Life/valve/dlls/hl.dll
+          (cd /tmp/data/stub && zip -qr ../valve.zip Half-Life)
+          (cd site && python3 -m http.server 8000 >/dev/null 2>&1 &)
+          # another origin, like the phone or PC that serves the data to the TV
+          (python3 tools/serve.py /tmp/data 8001 >/dev/null 2>&1 &)
+          sleep 1
+          cp tools/smoke-test.mjs /tmp/pw/smoke-test.mjs
+          node /tmp/pw/smoke-test.mjs http://localhost:8000/ http://localhost:8001/valve.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shot-*.png
+
+      - name: Build .wgt
+        env:
+          TIZEN_AUTHOR_P12: ${{ secrets.TIZEN_AUTHOR_P12 }}
+          TIZEN_AUTHOR_PASSWORD: ${{ secrets.TIZEN_AUTHOR_PASSWORD }}
+        run: |
+          npm install --no-save --prefix /tmp/tizenjs github:reisxd/tizen.js
+          TIZENJS=/tmp/tizenjs/node_modules/tizen/cli.js
+
+          if [ -n "$TIZEN_AUTHOR_P12" ]; then
+            echo "$TIZEN_AUTHOR_P12" | base64 -d > /tmp/author.p12
+            PASS="$TIZEN_AUTHOR_PASSWORD"
+          else
+            echo "::warning::TIZEN_AUTHOR_P12 secret not set, signing with a throwaway certificate"
+            PASS=throwaway
+            node "$TIZENJS" create-tizen-cert --name xash3d-tizen --password "$PASS" --output /tmp/author.p12
+          fi
+
+          python3 -m pip install --quiet pillow
+          mkdir -p wgt
+          cp -r app/. wgt/
+          sed "s/@VERSION@/${{ steps.ver.outputs.version }}/" tizen/config.xml > wgt/config.xml
+          python3 - <<'EOF'
+          from PIL import Image, ImageDraw, ImageFont
+          icon = Image.new("RGBA", (512, 423), (16, 18, 24, 255))
+          draw = ImageDraw.Draw(icon)
+          font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 96)
+          draw.text((256, 211), "Xash3D", font=font, fill=(255, 176, 0, 255), anchor="mm")
+          icon.save("wgt/icon.png")
+          EOF
+
+          cd wgt
+          node "$TIZENJS" build . -t wgt -o ../Xash3D.wgt --author /tmp/author.p12 --authorPwd "$PASS" -p public
+          cd ..
+          unzip -l Xash3D.wgt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Xash3D-wgt
+          path: Xash3D.wgt
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" Xash3D.wgt \
+            --title "Xash3D for Tizen ${GITHUB_REF_NAME}" \
+            --notes-file tools/release-notes.md
+
+  deploy:
+    needs: build
+    # GitHub Pages needs a public repository
+    if: github.ref == 'refs/heads/main' && !github.event.repository.private
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
