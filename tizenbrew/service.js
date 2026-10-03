@@ -72,11 +72,11 @@ function servePhonePage(res) {
       r.on("end", function () {
          if (r.statusCode === 200) phonePage = { data: Buffer.concat(chunks), at: Date.now() };
          if (phonePage) send(res, 200, phonePage.data, type);
-         else send(res, 502, "TV sayfayı indiremedi: HTTP " + r.statusCode, "text/plain; charset=utf-8");
+         else send(res, 502, "The TV could not download the page: HTTP " + r.statusCode, "text/plain; charset=utf-8");
       });
    }).on("error", function (err) {
       if (phonePage) send(res, 200, phonePage.data, type);
-      else send(res, 502, "TV internete bağlanamadı: " + err.message, "text/plain; charset=utf-8");
+      else send(res, 502, "The TV could not reach the internet: " + err.message, "text/plain; charset=utf-8");
    });
 }
 
@@ -92,7 +92,7 @@ function handleData(req, res) {
 function handleUpload(req, res) {
    if (!waiting || busy) {
       send(res, 503, JSON.stringify({
-         error: busy ? "Başka bir gönderim sürüyor." : "TV hazır değil. TV'de Xash3D'nin açılış ekranı açık olmalı."
+         error: busy ? "Another transfer is in progress." : "The TV is not ready. The Xash3D launcher must be open on the TV."
       }));
       req.resume();
       return;
@@ -108,7 +108,7 @@ function handleUpload(req, res) {
       waiting = null;
       if (failed) {
          kill(tv); /* the TV app sees a broken download */
-         send(res, 500, JSON.stringify({ error: "Gönderim yarıda kesildi." }));
+         send(res, 500, JSON.stringify({ error: "The transfer was interrupted." }));
       } else {
          send(res, 200, JSON.stringify({ ok: true }));
       }

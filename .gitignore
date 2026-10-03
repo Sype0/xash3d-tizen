@@ -4,3 +4,4 @@ build/
 *.wgt
 *.p12
 *.zip
+__pycache__/

@@ -38,7 +38,7 @@ def local_ip():
 
 
 def make_zip(game_dir, out):
-    print(f"valve.zip hazırlanıyor ({game_dir}) ...")
+    print(f"Creating valve.zip ({game_dir}) ...")
     count = size = 0
     tmp = out + ".tmp"
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
@@ -52,7 +52,7 @@ def make_zip(game_dir, out):
                 count += 1
                 size += os.path.getsize(full)
     os.replace(tmp, out)
-    print(f"{count} dosya, açılmış boyut {size / 1048576:.0f} MB, zip {os.path.getsize(out) / 1048576:.0f} MB")
+    print(f"{count} files, {size / 1048576:.0f} MB unpacked, zip {os.path.getsize(out) / 1048576:.0f} MB")
 
 
 def main():
@@ -62,10 +62,10 @@ def main():
     if not os.path.exists("valve.zip"):
         game_dir = next((d for d in os.listdir(".") if d.lower() == "valve" and os.path.isdir(d)), None)
         if not game_dir:
-            sys.exit(f"{os.getcwd()} içinde valve klasörü ya da valve.zip yok")
+            sys.exit(f"no valve folder or valve.zip in {os.getcwd()}")
         make_zip(game_dir, "valve.zip")
     server = http.server.ThreadingHTTPServer(("0.0.0.0", port), Handler)
-    print(f"TV'de şu adresi gir: http://{local_ip()}:{port}/")
+    print(f"Enter this address on the TV: http://{local_ip()}:{port}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

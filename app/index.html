@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=1920, initial-scale=1">
@@ -16,10 +16,10 @@
          }
          window.xashShowError = show;
          window.addEventListener("error", function (e) {
-            show("Hata: " + (e.message || e) + (e.filename ? " (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
+            show("Error: " + (e.message || e) + (e.filename ? " (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
          });
          window.addEventListener("unhandledrejection", function (e) {
-            show("Hata: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
+            show("Error: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
          });
       })();
    </script>
@@ -33,8 +33,8 @@
          </div>
          <div id="phone-panel">
             <div>
-               <div class="phone-title">📱 Oyun dosyalarını telefondan gönder</div>
-               <div class="muted">QR'ı telefonunla okut, valve.zip'i seç.<br>Aynı Wi-Fi ağında olmalısın.</div>
+               <div class="phone-title">📱 Send the game data from your phone</div>
+               <div class="muted">Scan the QR code with your phone and pick valve.zip.<br>Both must be on the same Wi-Fi network.</div>
                <div class="muted path" id="phone-url"></div>
             </div>
             <div id="qr"></div>
@@ -43,52 +43,52 @@
 
       <section id="screen-home" class="screen">
          <div class="list">
-            <button class="item" id="btn-play"><span>Half-Life'ı başlat</span><span class="meta" id="play-meta"></span></button>
-            <button class="item" id="btn-url"><span>Oyun dosyalarının adresi</span><span class="meta">HTTP</span></button>
-            <button class="item" id="btn-help"><span>Kontroller</span><span class="meta"></span></button>
-            <button class="item" id="btn-reset"><span>Kayıtları ve ayarları sil</span><span class="meta"></span></button>
-            <button class="item" id="btn-wipe"><span>TV'deki oyun dosyalarını sil</span><span class="meta"></span></button>
+            <button class="item" id="btn-play"><span>Start Half-Life</span><span class="meta" id="play-meta"></span></button>
+            <button class="item" id="btn-url"><span>Game data address</span><span class="meta">HTTP</span></button>
+            <button class="item" id="btn-help"><span>Controls</span><span class="meta"></span></button>
+            <button class="item" id="btn-reset"><span>Delete saves and settings</span><span class="meta"></span></button>
+            <button class="item" id="btn-wipe"><span>Delete the game data on the TV</span><span class="meta"></span></button>
          </div>
-         <p class="muted note">Oyun dosyaları uygulamayla gelmez; kendi Half-Life kopyandaki <code>valve</code> klasörü gerekir.
-            Bir kez gönderdikten sonra TV'de saklanır.</p>
+         <p class="muted note">The game data is not included; you need the <code>valve</code> folder of your own Half-Life copy.
+            Once sent, it is kept on the TV.</p>
       </section>
 
       <section id="screen-howto" class="screen">
-         <h2>Önce oyun dosyalarını gönder</h2>
-         <p class="muted">Kendi Half-Life kopyandaki <code>valve</code> klasörünü zip yap, sonra:</p>
-         <p><b>Telefondan:</b> sağ üstteki QR kodu okut ve zip dosyasını seç (yalnızca TizenBrew'da).</p>
-         <p><b>Ağdan:</b> dosyaların olduğu cihazda <code>python3 serve.py Half-Life-klasörü</code> çalıştır ve gösterdiği adresi gir.</p>
+         <h2>Send the game data first</h2>
+         <p class="muted">Zip the <code>valve</code> folder of your own Half-Life copy, then:</p>
+         <p><b>From a phone:</b> scan the QR code at the top right and pick the zip (TizenBrew only).</p>
+         <p><b>Over the network:</b> run <code>python3 serve.py Half-Life-folder</code> on the device that has the files and enter the address it prints.</p>
          <div class="row">
-            <button class="btn" id="btn-howto-url">Adres gir</button>
+            <button class="btn" id="btn-howto-url">Enter address</button>
          </div>
       </section>
 
       <section id="screen-url" class="screen">
-         <h2>Oyun dosyalarının adresi</h2>
-         <p class="muted"><code>tools/serve.py</code> betiğinin gösterdiği adres. Örnek: <code>http://192.168.1.20:8000/</code><br>
-            Adres <code>.zip</code> ile bitmiyorsa o klasördeki <code>valve.zip</code> indirilir.</p>
+         <h2>Game data address</h2>
+         <p class="muted">The address printed by <code>tools/serve.py</code>. Example: <code>http://192.168.1.20:8000/</code><br>
+            If it does not end in <code>.zip</code>, <code>valve.zip</code> in that folder is downloaded.</p>
          <input type="text" id="url-input" class="focusable" spellcheck="false" autocomplete="off">
          <div class="row">
-            <button class="btn" id="btn-url-ok">Kaydet ve başlat</button>
+            <button class="btn" id="btn-url-ok">Save and start</button>
          </div>
       </section>
 
       <section id="screen-help" class="screen">
-         <h2>Kontroller</h2>
+         <h2>Controls</h2>
          <table class="keys">
-            <tr><td>Yön tuşları</td><td>İleri / geri, sağa / sola dön (menüde gezinme)</td></tr>
-            <tr><td>OK</td><td>Ateş (menüde seç)</td></tr>
-            <tr><td>Geri</td><td>Oyun menüsü (Esc)</td></tr>
-            <tr><td>Kırmızı</td><td>Zıpla</td></tr>
-            <tr><td>Yeşil</td><td>Kullan</td></tr>
-            <tr><td>Sarı</td><td>Şarjör değiştir</td></tr>
-            <tr><td>Mavi</td><td>Eğil</td></tr>
-            <tr><td>CH + / CH −</td><td>Sonraki / önceki silah</td></tr>
-            <tr><td>1 – 5</td><td>Silah grupları</td></tr>
-            <tr><td>Oynat/Duraklat</td><td>Hızlı kayıt (F6)</td></tr>
-            <tr><td>Geri sar</td><td>Hızlı kaydı yükle (F7)</td></tr>
+            <tr><td>Arrow keys</td><td>Forward / back, turn left / right (menu navigation)</td></tr>
+            <tr><td>OK</td><td>Fire (select in menus)</td></tr>
+            <tr><td>Back</td><td>Game menu (Esc)</td></tr>
+            <tr><td>Red</td><td>Jump</td></tr>
+            <tr><td>Green</td><td>Use</td></tr>
+            <tr><td>Yellow</td><td>Reload</td></tr>
+            <tr><td>Blue</td><td>Duck</td></tr>
+            <tr><td>CH + / CH −</td><td>Next / previous weapon</td></tr>
+            <tr><td>1 – 5</td><td>Weapon slots</td></tr>
+            <tr><td>Play/Pause</td><td>Quick save (F6)</td></tr>
+            <tr><td>Rewind</td><td>Quick load (F7)</td></tr>
          </table>
-         <p class="muted">Kumandayla ancak menüde gezmek ve denemek mümkün; oynamak için USB/Bluetooth oyun kolu ya da klavye + fare bağla.</p>
+         <p class="muted">The remote is only good for the menus and a quick try; connect a USB/Bluetooth gamepad or a keyboard and mouse to play.</p>
       </section>
    </div>
 
@@ -96,7 +96,7 @@
 
    <div id="loading">
       <div class="spinner"></div>
-      <div id="loading-text">Yükleniyor…</div>
+      <div id="loading-text">Loading…</div>
       <div class="bar"><div id="loading-bar"></div></div>
    </div>
 

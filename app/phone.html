@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=device-width, initial-scale=1">
-   <title>Xash3D — TV'ye oyun dosyalarını gönder</title>
+   <title>Xash3D — send the game data to the TV</title>
    <style>
       :root { color-scheme: dark; }
       body {
@@ -55,15 +55,15 @@
 </head>
 <body>
    <main>
-      <h1>TV'ye oyun dosyalarını gönder</h1>
-      <p class="muted">Kendi Half-Life kopyandaki <code>valve</code> klasörünü zip yap (dosya yöneticisinde klasöre uzun bas → Sıkıştır)
-         ve aşağıdan seç. Telefon ve TV aynı Wi-Fi ağında olmalı. Dosyalar TV'de saklanır; bunu bir kez yapman yeterli.</p>
+      <h1>Send the game data to the TV</h1>
+      <p class="muted">Zip the <code>valve</code> folder of your own Half-Life copy (in a file manager: long-press the folder → Compress)
+         and pick it below. The phone and the TV must be on the same Wi-Fi network. The files are kept on the TV, so you only need to do this once.</p>
 
       <label for="file">valve.zip</label>
-      <div class="pick" id="pick">Zip dosyasını seçmek için dokun</div>
+      <div class="pick" id="pick">Tap to choose the zip file</div>
       <input type="file" id="file" accept=".zip,application/zip">
 
-      <button id="send" disabled>TV'ye gönder</button>
+      <button id="send" disabled>Send to TV</button>
       <div class="bar" id="bar"><div id="bar-fill"></div></div>
       <div id="status"></div>
    </main>
@@ -85,7 +85,7 @@
 
       fileInput.onchange = function () {
          var f = fileInput.files[0];
-         pick.textContent = f ? f.name + " (" + mb(f.size) + ")" : "Zip dosyasını seçmek için dokun";
+         pick.textContent = f ? f.name + " (" + mb(f.size) + ")" : "Tap to choose the zip file";
          pick.classList.toggle("has-file", !!f);
          sendBtn.disabled = !f;
          setStatus("");
@@ -96,7 +96,7 @@
          if (!f) return;
          sendBtn.disabled = true;
          document.getElementById("bar").style.display = "block";
-         setStatus("Gönderiliyor…");
+         setStatus("Sending…");
 
          /* XHR rather than fetch: it streams the file from disk and reports progress */
          var xhr = new XMLHttpRequest();
@@ -104,21 +104,21 @@
          xhr.upload.onprogress = function (e) {
             if (!e.lengthComputable) return;
             document.getElementById("bar-fill").style.width = Math.round(e.loaded / e.total * 100) + "%";
-            setStatus("Gönderiliyor… " + mb(e.loaded) + " / " + mb(e.total));
+            setStatus("Sending… " + mb(e.loaded) + " / " + mb(e.total));
          };
          xhr.onload = function () {
             sendBtn.disabled = false;
             if (xhr.status === 200) {
-               setStatus("Gönderildi. Oyun TV'de açılıyor.", "ok");
+               setStatus("Sent. The game is starting on the TV.", "ok");
                return;
             }
-            var msg = "Gönderilemedi (HTTP " + xhr.status + ")";
+            var msg = "Could not send (HTTP " + xhr.status + ")";
             try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { /* not JSON */ }
             setStatus(msg, "err");
          };
          xhr.onerror = function () {
             sendBtn.disabled = false;
-            setStatus("TV'ye bağlanılamadı. Aynı Wi-Fi ağında mısın?", "err");
+            setStatus("Could not reach the TV. Are you on the same Wi-Fi network?", "err");
          };
          xhr.send(f);
       };

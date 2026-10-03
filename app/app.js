@@ -257,7 +257,7 @@
          var s = document.createElement("script");
          s.src = url;
          s.onload = resolve;
-         s.onerror = function () { reject(new Error("Script yüklenemedi: " + url)); };
+         s.onerror = function () { reject(new Error("Could not load script: " + url)); };
          document.body.appendChild(s);
       });
    }
@@ -325,14 +325,14 @@
                if (r.done) { unz.push(new Uint8Array(0), true); return; }
                loaded += r.value.length;
                unz.push(r.value);
-               loading("Oyun dosyaları alınıyor (" + fmtSize(loaded) + (total ? " / " + fmtSize(total) : "") + ")",
+               loading("Receiving game data (" + fmtSize(loaded) + (total ? " / " + fmtSize(total) : "") + ")",
                   total ? loaded / total : null);
                return pump();
             });
          }
          return pump().then(function () {
             if (zipErr) throw zipErr;
-            if (!count) throw new Error("zip içinde valve klasörü bulunamadı");
+            if (!count) throw new Error("no valve folder found in the zip");
             log("game data:", count, "files,", fmtSize(bytes));
          });
       });
@@ -348,7 +348,7 @@
 
    function openDb(name) {
       return new Promise(function (resolve, reject) {
-         if (!window.indexedDB) { reject(new Error("IndexedDB yok")); return; }
+         if (!window.indexedDB) { reject(new Error("IndexedDB is not available")); return; }
          var req = indexedDB.open(name, 1);
          req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
          req.onsuccess = function () { resolve(req.result); };
@@ -414,7 +414,7 @@
                tx.oncomplete = resolve;
                tx.onerror = tx.onabort = function () { reject(tx.error || new Error("IndexedDB")); };
             }).then(function () {
-               loading("TV'ye kaydediliyor…", i / paths.length);
+               loading("Saving to the TV…", i / paths.length);
                return next();
             });
          }
@@ -432,10 +432,10 @@
    function loadCachedGame(files) {
       return openDb(GAME_DB).then(function (db) {
          return readAll(db, files, function (n) {
-            loading("Oyun dosyaları okunuyor (" + n + ")", null);
+            loading("Reading game data (" + n + ")", null);
          }).then(function (n) {
             db.close();
-            if (!n) { setGameCached(false); throw new Error("TV'de kayıtlı oyun dosyası yok"); }
+            if (!n) { setGameCached(false); throw new Error("no game data stored on the TV"); }
             log("game data:", n, "files (cached)");
          });
       });
@@ -485,9 +485,9 @@
    function wipe(btn, name, after) {
       var meta = $(btn).querySelector(".meta");
       deleteDb(name).then(function () {
-         meta.textContent = "silindi";
+         meta.textContent = "deleted";
          if (after) after();
-      }, function () { meta.textContent = "silinemedi"; });
+      }, function () { meta.textContent = "could not delete"; });
    }
 
    /* ------------------------------------------------------------------ */
@@ -513,8 +513,8 @@
       playing = false;
       document.body.classList.remove("playing");
       $("errors").textContent = "";
-      fail("Motor durdu" + (what ? " (" + what + ")" : "") + ":\n" + engineLog.slice(-6).join("\n") +
-         "\nBaşlatıcıya dönmek için bir tuşa bas.");
+      fail("The engine stopped" + (what ? " (" + what + ")" : "") + ":\n" + engineLog.slice(-6).join("\n") +
+         "\nPress any key to return to the launcher.");
    }
 
    /* A fatal engine error during start-up (missing or broken game data)
@@ -592,21 +592,21 @@
       if (phoneAbort) { phoneAbort.abort(); phoneAbort = null; }
       var files = {};
       var db = null;
-      loading("Oyun dosyaları alınıyor…", null);
+      loading("Receiving game data…", null);
       getFiles(files).then(function () {
          return restoreUserFiles(files);
       }).then(function (d) {
          db = d;
-         loading("Motor indiriliyor…", null);
+         loading("Downloading the engine…", null);
          return Promise.all([fetchBytes(ENGINE + "extras.pk3"), loadScript(ENGINE + "raw.js")]);
       }).then(function (r) {
          files[GAME_DIR + "/extras.pk3"] = r[0];
-         loading("Başlatılıyor…", 1);
+         loading("Starting…", 1);
          return startEngine(files, db);
       }).catch(function (err) {
          playing = false;
          document.body.classList.remove("playing");
-         fail("Başlatılamadı (" + what + ")", err);
+         fail("Could not start (" + what + ")", err);
          updateHome();
          if (phoneLink) waitForPhone();
       });
@@ -623,7 +623,7 @@
    function startGame() {
       var url = savedUrl();
       if (param("data")) startFromUrl(url);
-      else if (gameCached()) loadGame("TV'deki kayıt", loadCachedGame);
+      else if (gameCached()) loadGame("stored on the TV", loadCachedGame);
       else if (url) startFromUrl(url);
       else showScreen("screen-howto");
    }
@@ -642,7 +642,7 @@
       fetch(SERVICE + "api/data", { signal: ctl.signal }).then(function (res) {
          if (phoneAbort === ctl) phoneAbort = null;
          if (!res.ok) throw new Error("HTTP " + res.status);
-         loadGame("telefon", function (files) {
+         loadGame("phone", function (files) {
             return unzipResponse(res, files).then(function () { return cacheGame(files); });
          });
       }).catch(function (e) {
@@ -697,7 +697,7 @@
    };
 
    function updateHome() {
-      $("play-meta").textContent = gameCached() ? "oyun dosyaları TV'de kayıtlı" : (savedUrl() || "önce oyun dosyalarını gönder");
+      $("play-meta").textContent = gameCached() ? "game data is stored on the TV" : (savedUrl() || "send the game data first");
    }
 
    $("btn-play").onclick = startGame;
@@ -715,8 +715,8 @@
       var ua = navigator.userAgent;
       var tizenVer = (/Tizen ([\d.]+)/.exec(ua) || [])[1];
       var chromium = (/Chrome\/(\d+)/.exec(ua) || /\) (\d+)\.\d+\.\d+\.\d+\//.exec(ua) || [])[1];
-      $("subtitle").textContent = "Half-Life motoru (Xash3D FWGS) · " +
-         (tizenVer ? "Tizen " + tizenVer : (hasTizen ? "Tizen" : "tarayıcı")) +
+      $("subtitle").textContent = "Half-Life engine (Xash3D FWGS) · " +
+         (tizenVer ? "Tizen " + tizenVer : (hasTizen ? "Tizen" : "browser")) +
          " · " + (chromium ? "Chromium " + chromium : ua);
    })();
 

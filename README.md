@@ -30,7 +30,7 @@ Zip the `valve` folder of your Half-Life copy (the zip must contain the `valve` 
 python3 tools/serve.py "/path/to/Half-Life"
 ```
 
-The first run packs `valve` into `valve.zip`, leaving out what the TV cannot use (native libraries, videos, music), and prints an address such as `http://192.168.1.20:8000/`. Enter that address on the TV under *Oyun dosyalarının adresi*.
+The first run packs `valve` into `valve.zip`, leaving out what the TV cannot use (native libraries, videos, music), and prints an address such as `http://192.168.1.20:8000/`. Enter that address on the TV under *Game data address*.
 
 The whole game folder is held in memory while playing, so the TV needs a few hundred MB of free RAM. Saved games and settings are stored on the TV as well.
 
