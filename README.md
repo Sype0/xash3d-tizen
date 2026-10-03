@@ -2,7 +2,7 @@
 
 Runs the [Xash3D FWGS](https://github.com/FWGS/xash3d-fwgs) engine (WebAssembly build) on Samsung Tizen TVs, so that Half-Life can be played from your own copy of the game.
 
-**Experimental.** CI only checks that the engine starts and mounts a stub game folder in headless Chromium; the game itself has not been run there, and nothing has been confirmed on a real TV yet.
+**Status:** Half-Life has been confirmed running on a Samsung U8000H (2025 Crystal UHD, Tizen 9.0). Other models are untested. CI has no game data, so it only checks that the engine starts and mounts a stub game folder in headless Chromium.
 
 No game data is included. You need the `valve` folder of a Half-Life copy you own. This project is not affiliated with Valve.
 
