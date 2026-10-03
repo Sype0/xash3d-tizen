@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="tr">
+<head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <title>Xash3D — TV'ye oyun dosyalarını gönder</title>
+   <style>
+      :root { color-scheme: dark; }
+      body {
+         margin: 0;
+         padding: 24px 16px 48px;
+         background: #101218;
+         color: #e8eaf0;
+         font: 17px/1.45 system-ui, -apple-system, Roboto, Arial, sans-serif;
+      }
+      main { max-width: 520px; margin: 0 auto; }
+      h1 { font-size: 26px; margin: 0 0 4px; }
+      .muted { color: #9aa1b2; }
+      code { color: #ffd479; }
+      label { display: block; font-weight: 600; margin: 24px 0 8px; }
+      .pick {
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         min-height: 96px;
+         border: 2px dashed #3a4256;
+         border-radius: 14px;
+         background: #1d212c;
+         text-align: center;
+         padding: 16px;
+         word-break: break-all;
+         cursor: pointer;
+      }
+      .pick.has-file { border-style: solid; border-color: #ffb000; }
+      input[type=file] { display: none; }
+      button {
+         width: 100%;
+         font: inherit;
+         border-radius: 12px;
+         padding: 14px;
+         border: 0;
+         margin-top: 28px;
+         background: #ffb000;
+         color: #1a1300;
+         font-weight: 700;
+         font-size: 19px;
+      }
+      button:disabled { background: #3a4256; color: #9aa1b2; }
+      .bar { height: 8px; background: #2a3040; border-radius: 4px; overflow: hidden; margin-top: 20px; display: none; }
+      .bar div { height: 100%; width: 0; background: #ffb000; transition: width .2s; }
+      #status { margin-top: 16px; min-height: 1.5em; }
+      #status.ok { color: #7ee2a0; }
+      #status.err { color: #ff8a80; }
+   </style>
+</head>
+<body>
+   <main>
+      <h1>TV'ye oyun dosyalarını gönder</h1>
+      <p class="muted">Kendi Half-Life kopyandaki <code>valve</code> klasörünü zip yap (dosya yöneticisinde klasöre uzun bas → Sıkıştır)
+         ve aşağıdan seç. Telefon ve TV aynı Wi-Fi ağında olmalı. Dosyalar TV'de saklanır; bunu bir kez yapman yeterli.</p>
+
+      <label for="file">valve.zip</label>
+      <div class="pick" id="pick">Zip dosyasını seçmek için dokun</div>
+      <input type="file" id="file" accept=".zip,application/zip">
+
+      <button id="send" disabled>TV'ye gönder</button>
+      <div class="bar" id="bar"><div id="bar-fill"></div></div>
+      <div id="status"></div>
+   </main>
+
+   <script>
+      var fileInput = document.getElementById("file");
+      var pick = document.getElementById("pick");
+      var sendBtn = document.getElementById("send");
+      var statusEl = document.getElementById("status");
+
+      function mb(n) { return (n / 1048576).toFixed(0) + " MB"; }
+
+      function setStatus(text, cls) {
+         statusEl.textContent = text;
+         statusEl.className = cls || "";
+      }
+
+      pick.onclick = function () { fileInput.click(); };
+
+      fileInput.onchange = function () {
+         var f = fileInput.files[0];
+         pick.textContent = f ? f.name + " (" + mb(f.size) + ")" : "Zip dosyasını seçmek için dokun";
+         pick.classList.toggle("has-file", !!f);
+         sendBtn.disabled = !f;
+         setStatus("");
+      };
+
+      sendBtn.onclick = function () {
+         var f = fileInput.files[0];
+         if (!f) return;
+         sendBtn.disabled = true;
+         document.getElementById("bar").style.display = "block";
+         setStatus("Gönderiliyor…");
+
+         /* XHR rather than fetch: it streams the file from disk and reports progress */
+         var xhr = new XMLHttpRequest();
+         xhr.open("POST", "api/upload");
+         xhr.upload.onprogress = function (e) {
+            if (!e.lengthComputable) return;
+            document.getElementById("bar-fill").style.width = Math.round(e.loaded / e.total * 100) + "%";
+            setStatus("Gönderiliyor… " + mb(e.loaded) + " / " + mb(e.total));
+         };
+         xhr.onload = function () {
+            sendBtn.disabled = false;
+            if (xhr.status === 200) {
+               setStatus("Gönderildi. Oyun TV'de açılıyor.", "ok");
+               return;
+            }
+            var msg = "Gönderilemedi (HTTP " + xhr.status + ")";
+            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { /* not JSON */ }
+            setStatus(msg, "err");
+         };
+         xhr.onerror = function () {
+            sendBtn.disabled = false;
+            setStatus("TV'ye bağlanılamadı. Aynı Wi-Fi ağında mısın?", "err");
+         };
+         xhr.send(f);
+      };
+   </script>
+</body>
+</html>

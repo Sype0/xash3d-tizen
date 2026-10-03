@@ -31,6 +31,14 @@
             <h1>Xash3D</h1>
             <div id="subtitle" class="muted">Samsung Tizen TV</div>
          </div>
+         <div id="phone-panel">
+            <div>
+               <div class="phone-title">📱 Oyun dosyalarını telefondan gönder</div>
+               <div class="muted">QR'ı telefonunla okut, valve.zip'i seç.<br>Aynı Wi-Fi ağında olmalısın.</div>
+               <div class="muted path" id="phone-url"></div>
+            </div>
+            <div id="qr"></div>
+         </div>
       </header>
 
       <section id="screen-home" class="screen">
@@ -39,9 +47,20 @@
             <button class="item" id="btn-url"><span>Oyun dosyalarının adresi</span><span class="meta">HTTP</span></button>
             <button class="item" id="btn-help"><span>Kontroller</span><span class="meta"></span></button>
             <button class="item" id="btn-reset"><span>Kayıtları ve ayarları sil</span><span class="meta"></span></button>
+            <button class="item" id="btn-wipe"><span>TV'deki oyun dosyalarını sil</span><span class="meta"></span></button>
          </div>
-         <p class="muted note">Oyun dosyaları uygulamayla gelmez. Kendi Half-Life kopyandaki <code>valve</code> klasörünün bulunduğu
-            bilgisayarda ya da telefonda <code>python3 serve.py Half-Life-klasörü</code> çalıştır ve gösterdiği adresi buraya gir.</p>
+         <p class="muted note">Oyun dosyaları uygulamayla gelmez; kendi Half-Life kopyandaki <code>valve</code> klasörü gerekir.
+            Bir kez gönderdikten sonra TV'de saklanır.</p>
+      </section>
+
+      <section id="screen-howto" class="screen">
+         <h2>Önce oyun dosyalarını gönder</h2>
+         <p class="muted">Kendi Half-Life kopyandaki <code>valve</code> klasörünü zip yap, sonra:</p>
+         <p><b>Telefondan:</b> sağ üstteki QR kodu okut ve zip dosyasını seç (yalnızca TizenBrew'da).</p>
+         <p><b>Ağdan:</b> dosyaların olduğu cihazda <code>python3 serve.py Half-Life-klasörü</code> çalıştır ve gösterdiği adresi gir.</p>
+         <div class="row">
+            <button class="btn" id="btn-howto-url">Adres gir</button>
+         </div>
       </section>
 
       <section id="screen-url" class="screen">
@@ -84,6 +103,7 @@
    <pre id="errors"></pre>
 
    <script src="fflate.min.js"></script>
+   <script src="qrcode.js"></script>
    <script src="app.js"></script>
 </body>
 </html>

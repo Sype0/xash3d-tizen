@@ -96,6 +96,12 @@
 
    function onKey(e) {
       if (e.__xash) return;
+      if (engineDead) {
+         /* a stopped engine cannot be restarted in the same page */
+         e.preventDefault();
+         if (e.type === "keydown") location.reload();
+         return;
+      }
       if (playing) {
          /* SDL keys off event.code, which TV remotes don't provide;
             re-dispatch a proper keyboard event. Real keyboards pass through. */
@@ -284,9 +290,9 @@
 
    /* The zip is never held in memory as a whole: network chunks go straight
       into the unzipper and only the unpacked files are kept. */
-   function fetchGameZip(url, files) {
-      return fetch(url).then(function (res) {
-         if (!res.ok) throw new Error("HTTP " + res.status + " " + url);
+   function unzipResponse(res, files) {
+      return Promise.resolve().then(function () {
+         if (!res.ok) throw new Error("HTTP " + res.status + " " + res.url);
          var total = parseInt(res.headers.get("Content-Length"), 10) || 0;
          var loaded = 0, count = 0, bytes = 0, zipErr = null;
          var unz = new fflate.Unzip();
@@ -336,13 +342,14 @@
    /* Saves and settings (IndexedDB)                                       */
    /* ------------------------------------------------------------------ */
 
-   var DB_NAME = "xash3d-tizen";
+   var DB_NAME = "xash3d-tizen";      /* what the engine wrote: saves, .cfg */
+   var GAME_DB = "xash3d-game";       /* unpacked game data, so it is sent only once */
    var STORE = "files";
 
-   function openDb() {
+   function openDb(name) {
       return new Promise(function (resolve, reject) {
          if (!window.indexedDB) { reject(new Error("IndexedDB yok")); return; }
-         var req = indexedDB.open(DB_NAME, 1);
+         var req = indexedDB.open(name, 1);
          req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
          req.onsuccess = function () { resolve(req.result); };
          req.onerror = function () { reject(req.error); };
@@ -350,18 +357,93 @@
    }
 
    /* Puts what the engine wrote in earlier sessions on top of the game data. */
-   function restoreUserFiles(files) {
-      return openDb().then(function (db) {
-         return new Promise(function (resolve, reject) {
-            var req = db.transaction(STORE).objectStore(STORE).openCursor();
-            req.onsuccess = function () {
-               var c = req.result;
-               if (!c) { resolve(db); return; }
-               files[c.key] = c.value;
-               c.continue();
-            };
-            req.onerror = function () { reject(req.error); };
+   function deleteDb(name) {
+      return new Promise(function (resolve, reject) {
+         if (!window.indexedDB) { resolve(); return; }
+         var req = indexedDB.deleteDatabase(name);
+         req.onsuccess = resolve;
+         req.onerror = function () { reject(req.error); };
+      });
+   }
+
+   /* Copies every stored file (path -> Uint8Array) into files. */
+   function readAll(db, files, onCount) {
+      return new Promise(function (resolve, reject) {
+         var n = 0;
+         var req = db.transaction(STORE).objectStore(STORE).openCursor();
+         req.onsuccess = function () {
+            var c = req.result;
+            if (!c) { resolve(n); return; }
+            files[c.key] = c.value;
+            n++;
+            if (onCount && n % 100 === 0) onCount(n);
+            c.continue();
+         };
+         req.onerror = function () { reject(req.error); };
+      });
+   }
+
+   function gameCached() {
+      try { return localStorage.getItem("xash_game_cached") === "1"; } catch (e) { return false; }
+   }
+
+   function setGameCached(on) {
+      try {
+         if (on) localStorage.setItem("xash_game_cached", "1");
+         else localStorage.removeItem("xash_game_cached");
+      } catch (e) { /* ignore */ }
+   }
+
+   /* Keeps the unpacked game data on the TV. Without it (storage full or
+      unavailable) the game still starts, the data just has to be sent again. */
+   function cacheGame(files) {
+      setGameCached(false);
+      var paths = Object.keys(files);
+      var i = 0;
+      return deleteDb(GAME_DB).then(function () { return openDb(GAME_DB); }).then(function (db) {
+         function next() {
+            if (i >= paths.length) return;
+            return new Promise(function (resolve, reject) {
+               var tx = db.transaction(STORE, "readwrite");
+               var st = tx.objectStore(STORE);
+               /* a transaction per ~16 MB keeps the copies made by put() small */
+               for (var bytes = 0; i < paths.length && bytes < 16777216; i++) {
+                  st.put(files[paths[i]], paths[i]);
+                  bytes += files[paths[i]].length;
+               }
+               tx.oncomplete = resolve;
+               tx.onerror = tx.onabort = function () { reject(tx.error || new Error("IndexedDB")); };
+            }).then(function () {
+               loading("TV'ye kaydediliyor…", i / paths.length);
+               return next();
+            });
+         }
+         return Promise.resolve(next()).then(function () {
+            db.close();
+            setGameCached(true);
+            if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+         }, function (e) { db.close(); throw e; });
+      }).catch(function (e) {
+         log("game data not kept on the TV:", e);
+         return deleteDb(GAME_DB).catch(function () {});
+      });
+   }
+
+   function loadCachedGame(files) {
+      return openDb(GAME_DB).then(function (db) {
+         return readAll(db, files, function (n) {
+            loading("Oyun dosyaları okunuyor (" + n + ")", null);
+         }).then(function (n) {
+            db.close();
+            if (!n) { setGameCached(false); throw new Error("TV'de kayıtlı oyun dosyası yok"); }
+            log("game data:", n, "files (cached)");
          });
+      });
+   }
+
+   function restoreUserFiles(files) {
+      return openDb(DB_NAME).then(function (db) {
+         return readAll(db, files).then(function () { return db; });
       }).catch(function (e) {
          log("saves will not persist:", e);
          return null;
@@ -400,11 +482,12 @@
       }, 5000);
    }
 
-   function resetUserFiles() {
-      if (!window.indexedDB) return;
-      var req = indexedDB.deleteDatabase(DB_NAME);
-      req.onsuccess = function () { $("btn-reset").querySelector(".meta").textContent = "silindi"; };
-      req.onerror = function () { $("btn-reset").querySelector(".meta").textContent = "silinemedi"; };
+   function wipe(btn, name, after) {
+      var meta = $(btn).querySelector(".meta");
+      deleteDb(name).then(function () {
+         meta.textContent = "silindi";
+         if (after) after();
+      }, function () { meta.textContent = "silinemedi"; });
    }
 
    /* ------------------------------------------------------------------ */
@@ -421,6 +504,26 @@
    };
 
    var engineLog = [];
+   var engineStarted = false, engineDead = false;
+   var frames = 0, lastFrame = 0;
+
+   function engineFailed(what) {
+      if (engineDead) return;
+      engineDead = true;
+      playing = false;
+      document.body.classList.remove("playing");
+      $("errors").textContent = "";
+      fail("Motor durdu" + (what ? " (" + what + ")" : "") + ":\n" + engineLog.slice(-6).join("\n") +
+         "\nBaşlatıcıya dönmek için bir tuşa bas.");
+   }
+
+   /* A fatal engine error during start-up (missing or broken game data)
+      unwinds out of main() as an uncaught exception. */
+   function onUncaught() {
+      if (engineStarted && !frames) engineFailed();
+   }
+   window.addEventListener("error", onUncaught);
+   window.addEventListener("unhandledrejection", onUncaught);
 
    function onEngineLog(text) {
       console.log("xash:", text);
@@ -440,8 +543,6 @@
 
    function startEngine(files, db) {
       var extra = (param("args") || "").split(" ").filter(Boolean);
-      var crashed = false;
-      var frames = 0, lastFrame = 0;
 
       return Xash3D({
          arguments: ["-windowed", "-ref", "webgl2"].concat(sizeCanvas(), extra),
@@ -451,10 +552,7 @@
          print: onEngineLog,
          printErr: onEngineLog,
          postMainLoop: function () { frames++; lastFrame = Date.now(); },
-         onAbort: function (what) {
-            crashed = true;
-            fail("Motor durdu: " + what + "\n" + engineLog.slice(-8).join("\n"));
-         },
+         onAbort: engineFailed,
          onRuntimeInitialized: function () {
             var FS = this.FS;
             var made = {};
@@ -470,6 +568,7 @@
             if (db) startPersisting(FS, db);
 
             loading(null);
+            engineStarted = true;
             playing = true;
             document.body.classList.add("playing");
             canvas.focus();
@@ -477,7 +576,7 @@
             /* "Quit" in the game menu stops the main loop without telling
                us; go back to the launcher when frames stop coming. */
             setInterval(function () {
-               if (frames && !crashed && !document.hidden && Date.now() - lastFrame > 4000)
+               if (frames && !engineDead && !document.hidden && Date.now() - lastFrame > 4000)
                   location.reload();
             }, 1000);
             /* frames also stop while the app is in the background */
@@ -488,13 +587,13 @@
       });
    }
 
-   function startGame() {
-      var url = savedUrl();
-      if (!url) { openUrlScreen(); return; }
+   /* getFiles(files) fills files from one of the sources below. */
+   function loadGame(what, getFiles) {
+      if (phoneAbort) { phoneAbort.abort(); phoneAbort = null; }
       var files = {};
       var db = null;
       loading("Oyun dosyaları alınıyor…", null);
-      fetchGameZip(url, files).then(function () {
+      getFiles(files).then(function () {
          return restoreUserFiles(files);
       }).then(function (d) {
          db = d;
@@ -507,7 +606,68 @@
       }).catch(function (err) {
          playing = false;
          document.body.classList.remove("playing");
-         fail("Başlatılamadı (" + url + ")", err);
+         fail("Başlatılamadı (" + what + ")", err);
+         updateHome();
+         if (phoneLink) waitForPhone();
+      });
+   }
+
+   function startFromUrl(url) {
+      loadGame(url, function (files) {
+         return fetch(url).then(function (res) {
+            return unzipResponse(res, files);
+         }).then(function () { return cacheGame(files); });
+      });
+   }
+
+   function startGame() {
+      var url = savedUrl();
+      if (param("data")) startFromUrl(url);
+      else if (gameCached()) loadGame("TV'deki kayıt", loadCachedGame);
+      else if (url) startFromUrl(url);
+      else showScreen("screen-howto");
+   }
+
+   /* ---- Phone link (TizenBrew service in tizenbrew/service.js) ----
+      The service relays the zip the phone uploads straight into a request
+      this app keeps open, so nothing is buffered on the way. */
+
+   var SERVICE = "http://127.0.0.1:8086/";
+   var phoneLink = false;
+   var phoneAbort = null;
+
+   function waitForPhone() {
+      if (playing || loadingActive || phoneAbort) return;
+      var ctl = phoneAbort = new AbortController();
+      fetch(SERVICE + "api/data", { signal: ctl.signal }).then(function (res) {
+         if (phoneAbort === ctl) phoneAbort = null;
+         if (!res.ok) throw new Error("HTTP " + res.status);
+         loadGame("telefon", function (files) {
+            return unzipResponse(res, files).then(function () { return cacheGame(files); });
+         });
+      }).catch(function (e) {
+         if (phoneAbort === ctl) phoneAbort = null;
+         if (e && e.name === "AbortError") return;
+         setTimeout(waitForPhone, 3000);
+      });
+   }
+
+   function initPhoneLink() {
+      if (location.protocol === "https:") return; /* mixed content */
+      fetch(SERVICE + "api/info").then(function (res) { return res.json(); }).then(function (info) {
+         var qr = qrcode(0, "M");
+         qr.addData(info.url);
+         qr.make();
+         $("qr").innerHTML = qr.createSvgTag({ cellSize: 5, margin: 3, scalable: true });
+         $("phone-url").textContent = info.url;
+         $("phone-panel").style.display = "flex";
+         phoneLink = true;
+         waitForPhone();
+      }).catch(function () {
+         /* TizenBrew starts the service asynchronously; retry a few times.
+            Outside TizenBrew there is no service and the panel stays hidden. */
+         initPhoneLink.tries = (initPhoneLink.tries || 0) + 1;
+         if (initPhoneLink.tries < 6) setTimeout(initPhoneLink, 2000);
       });
    }
 
@@ -531,16 +691,23 @@
       if (!/^https?:\/\//.test(url)) url = "http://" + url;
       if (!/\.zip$/i.test(url)) url += (url.charAt(url.length - 1) === "/" ? "" : "/") + "valve.zip";
       try { localStorage.setItem("xash_data_url", url); } catch (e) { /* ignore */ }
-      $("play-meta").textContent = url;
       showScreen("screen-home", false);
       screenStack = [];
-      startGame();
+      startFromUrl(url);
    };
+
+   function updateHome() {
+      $("play-meta").textContent = gameCached() ? "oyun dosyaları TV'de kayıtlı" : (savedUrl() || "önce oyun dosyalarını gönder");
+   }
 
    $("btn-play").onclick = startGame;
    $("btn-url").onclick = openUrlScreen;
+   $("btn-howto-url").onclick = openUrlScreen;
    $("btn-help").onclick = function () { showScreen("screen-help"); };
-   $("btn-reset").onclick = resetUserFiles;
+   $("btn-reset").onclick = function () { wipe("btn-reset", DB_NAME); };
+   $("btn-wipe").onclick = function () {
+      wipe("btn-wipe", GAME_DB, function () { setGameCached(false); updateHome(); });
+   };
 
    /* Desktop: "... Chrome/120.0.0.0 ...". Samsung TVs omit "Chrome/":
       "... Tizen 9.0) AppleWebKit/537.36 (KHTML, like Gecko) 120.0.6099.5/9.0 TV Safari/537.36" */
@@ -553,6 +720,7 @@
          " · " + (chromium ? "Chromium " + chromium : ua);
    })();
 
-   $("play-meta").textContent = savedUrl() || "önce adres gir";
+   updateHome();
+   initPhoneLink();
    showScreen("screen-home", false);
 })();

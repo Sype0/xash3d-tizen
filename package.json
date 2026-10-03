@@ -33,5 +33,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Sype0/xash3d-tizen.git"
-  }
+  },
+  "serviceFile": "tizenbrew/service.js"
 }
