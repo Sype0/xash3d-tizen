@@ -2,7 +2,7 @@
 
 Runs the [Xash3D FWGS](https://github.com/FWGS/xash3d-fwgs) engine (WebAssembly build) on Samsung Tizen TVs, so that Half-Life can be played from your own copy of the game.
 
-**Experimental.** The build is tested in headless Chromium without game data; it has not been confirmed on a real TV yet.
+**Experimental.** CI only checks that the engine starts and mounts a stub game folder in headless Chromium; the game itself has not been run there, and nothing has been confirmed on a real TV yet.
 
 No game data is included. You need the `valve` folder of a Half-Life copy you own. This project is not affiliated with Valve.
 
@@ -20,7 +20,11 @@ No game data is included. You need the `valve` folder of a Half-Life copy you ow
 
 ## Game data
 
-On the machine that has Half-Life (Python 3 needed, Termux works):
+Zip the `valve` folder of your Half-Life copy (the zip must contain the `valve` folder itself). There are two ways to get it onto the TV; either way it is unpacked and stored on the TV, so this is needed only once.
+
+**From a phone (TizenBrew only):** the launcher shows a QR code. Scan it with a phone on the same Wi-Fi network, pick the zip and send it.
+
+**From a network address:** on the machine that has Half-Life (Python 3 needed, Termux works):
 
 ```
 python3 tools/serve.py "/path/to/Half-Life"
@@ -28,7 +32,7 @@ python3 tools/serve.py "/path/to/Half-Life"
 
 The first run packs `valve` into `valve.zip`, leaving out what the TV cannot use (native libraries, videos, music), and prints an address such as `http://192.168.1.20:8000/`. Enter that address on the TV under *Oyun dosyalarının adresi*.
 
-The data is downloaded on every start and kept in memory, so the TV needs a few hundred MB of free RAM. Saved games and settings are stored on the TV.
+The whole game folder is held in memory while playing, so the TV needs a few hundred MB of free RAM. Saved games and settings are stored on the TV as well.
 
 ## Remote keys
 
